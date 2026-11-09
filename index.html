@@ -679,14 +679,14 @@ function initReveals(){
 
 /* ---------- Scratch to reveal the date (hero pill) ----------
    The date pill is covered by a gold scratch-foil canvas. The guest
-   scratches with finger or mouse (real canvas scratch-off); at ~40%
-   cleared, the rest of the foil fades away and the full date shows.
-   A quick tap on the cover also reveals, as a fallback. */
+   scratches with finger or mouse (real canvas scratch-off); at ~30%
+   cleared, or after ~1.2 seconds of active rubbing, the foil is
+   removed and the full date shows. A tap alone does not reveal. */
 var scratchZone = document.getElementById("dateZone");
 var scratchPill = document.getElementById("scratchPill");
 var scratchCanvas = document.getElementById("scratchCanvas");
 var scratchHint = document.getElementById("scratchHint");
-var scratchRevealed = false, scratchInited = false, scratching = false;
+var scratchRevealed = false, scratchInited = false, scratching = false; var scRubbed = false, scRubMs = 0, scLastMoveT = 0;
 var scLastX = 0, scLastY = 0, scMoved = 0, scDownT = 0, scChecks = 0;
 
 function initScratch(){if(scratchInited)return;
@@ -717,10 +717,10 @@ function revealDate(){
   scratchPill.removeAttribute("tabindex");
   scratchPill.setAttribute("aria-label", "Wedding date: Saturday, 21 November 2026");
   document.getElementById("heroDateText").removeAttribute("aria-hidden");
-  toast("Saturday, 21 November 2026 — Add to Calendar 🤍");
+  toast("Saturday, 21 November 2026 — Add to Calendar 🤍"); if (scratchCanvas) scratchCanvas.remove(); if (scratchHint) scratchHint.remove();
   setTimeout(function(){
-    scratchCanvas.style.display = "none";
-    scratchHint.style.display = "none";
+    scratchCanvas.remove();
+    scratchHint.remove();
   }, 800);
 }
 
@@ -736,7 +736,7 @@ function scBrush(x1, y1, x2, y2){
   var ctx = scratchCanvas.getContext("2d");
   ctx.globalCompositeOperation = "destination-out";
   ctx.lineCap = "round"; ctx.lineJoin = "round";
-  ctx.lineWidth = 30 * (scratchCanvas.width / r.width);
+  ctx.lineWidth = 50 * (scratchCanvas.width / r.width);
   ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
 }
 function scPercent(){
@@ -750,7 +750,7 @@ function scPercent(){
 scratchCanvas.addEventListener("pointerdown", function(e){
   if (scratchRevealed) return;
   if (!scratchInited) initScratch();
-  scratching = true; scMoved = 0; scDownT = Date.now();
+  scratching = true; scRubbed = true;
   var p = scPos(e); scLastX = p.x; scLastY = p.y;
   scratchHint.style.opacity = "0";
   try { scratchCanvas.setPointerCapture(e.pointerId); } catch(err){}
@@ -763,26 +763,26 @@ scratchCanvas.addEventListener("pointermove", function(e){
   scMoved += Math.abs(p.x - scLastX) + Math.abs(p.y - scLastY);
   scBrush(scLastX, scLastY, p.x, p.y);
   scLastX = p.x; scLastY = p.y;
-  if (++scChecks % 5 === 0 && scPercent() >= 40) revealDate();
+  scChecks++; var scNow = Date.now(); if (scLastMoveT) scRubMs += Math.min(scNow - scLastMoveT, 250); scLastMoveT = scNow; if (scPercent() >= 30 || (scRubMs >= 1200 && scMoved >= 80)) revealDate();
 });
 function scEnd(){
   if (!scratching) return;
   scratching = false;
   if (scratchRevealed) return;
-  if (Date.now() - scDownT < 350 && scMoved < 12) { revealDate(); return; } /* tap fallback */
-  if (scPercent() >= 40) revealDate();
+  scLastMoveT = 0;
+  if (scPercent() >= 30 || (scRubMs >= 1200 && scMoved >= 80)) revealDate();
 }
 scratchCanvas.addEventListener("pointerup", scEnd);
-scratchCanvas.addEventListener("pointercancel", function(){ scratching = false; });
+scratchCanvas.addEventListener("pointercancel", function(){ scratching = false; scLastMoveT = 0; });
 scratchPill.addEventListener("keydown", function(e){
   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); revealDate(); }
 });
 window.addEventListener("resize", function(){
-  if (!scratchRevealed && scratchInited && scChecks === 0) initScratch();
+  if (!scratchRevealed && scratchInited && !scRubbed) initScratch();
 });
 if (document.fonts && document.fonts.ready) {
   document.fonts.ready.then(function(){
-    if (!scratchRevealed && scChecks === 0) initScratch();
+    if (!scratchRevealed && !scRubbed) initScratch();
   });
 }
 
